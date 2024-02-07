@@ -4,7 +4,7 @@ const router = express.Router();
 const controller = require('./index.controller');
 
 router.get('/', (req, res) => {
-    res.render('inedx', { pagaName: ProjectName })
+    res.render('index', { pagaName: 'ProjectName' })
 })
 //!!import
 

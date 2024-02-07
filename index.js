@@ -40,74 +40,75 @@ const packageNames = [
    "debug"
 ];
 
-if (confirmCreateDirectory) {
 
-   const source = template
+createTemplate();
+
+async function createTemplate() {
+   if (!confirmCreateDirectory) {
+      console.log('Aborted creating a new template');
+      return;
+   }
+
+   const source = template;
    const destination = path.join(CURR_DIR);
-   const routesPath = path.join(destination, 'routes')
-   const modelsPath = path.join(destination, 'models')
-   fse.copy(source, destination, {
-      filter: (src, dest) => {
-         if (src.includes('table.js')) return false
-         if (src.includes('index-template.js')) return false
-         return true
-      }
-   })
-      .then(() => {
-         if (routesName.length) {
-            let routes = routesName.split(' ')
-            routes.forEach((route) => {
-               fse.mkdirSync(path.join(routesPath, route))
-               fse.copySync(path.join(source, 'routes'), path.join(routesPath, route), {
-                  filter(src, dest) {
-                     if (src.includes('index.js')) return false
-                     return true
-                  }
-               })
-               fse.renameSync(path.join(routesPath, route, 'index-template.js'), path.join(routesPath, route, 'index.js'))
-            })
-            let indexRouteText = fse.readFileSync(path.join(routesPath, 'index.js'), 'utf-8')
-            let importLines = ''
-            routes.forEach((route) => {
-               importLines += `const ${route}Routes = require('./${route}/index')\n`
-            })
-            importLines += '\n'
-            let useLines = ''
-            routes.forEach((route) => {
-               useLines += `router.use('/${route}',${route}Routes)\n`
-            })
-            useLines += '\n'
-            console.log(importLines);
-            console.log(useLines);
-            indexRouteText = indexRouteText.replace('//!!import', importLines)
-            indexRouteText = indexRouteText.replace('//!!use\n', useLines)
-            indexRouteText = indexRouteText.replace('ProjectName', projectName)
-            fse.writeFileSync(path.join(routesPath, 'index.js'), indexRouteText)
-         }
-      })
-      .then(() => {
-         if (modelsName.length) {
-            let models = modelsName.split(' ')
-            models.forEach((model) => {
-               let modelText = fse.readFileSync(path.join(source, 'models', 'table.js'), 'utf-8')
-               modelText = modelText.replaceAll('TableName1', inflection.capitalize(model))
-               modelText = modelText.replaceAll('TableName2', inflection.camelize(model))
-               fse.writeFileSync(path.join(modelsPath, `${model}.js`), modelText)
-            })
-         }
-      })
-      .then(() => {
-         console.log(destination);
-         installPackages(path.join(destination), packageNames)
-      })
-      .then(() => {
-         console.log('Packages installed', packageNames);
-      })
-      .then(() => console.log(`Project setup completed! ;)`))
-      .catch(err => console.error(err));
+   const routesPath = path.join(destination, 'routes');
+   const modelsPath = path.join(destination, 'models');
 
-} else {
-   console.log('Aborted creating a new template');
+   try {
+      await copyTemplateFiles(source, destination);
+      await createRouteDirectories(source, routesName, routesPath);
+      await updateRouteIndexFile(routesName, routesPath);
+      await createModelFiles(source, modelsName, modelsPath);
+      await installRequiredPackages(destination, packageNames);
+      console.log('Project setup completed!');
+   } catch (err) {
+      console.error(err);
+   }
+}
+
+async function copyTemplateFiles(source, destination) {
+   await fse.copy(source, destination, { filter: customFilter });
+}
+
+async function createRouteDirectories(source, routesName, routesPath) {
+   if (!routesName.length) return;
+   const routes = routesName.split(' ');
+   for (const route of routes) {
+      const routeDir = path.join(routesPath, route);
+      fse.mkdirSync(routeDir);
+      fse.copySync(path.join(source, 'routes'), routeDir, { filter: excludeIndexFile });
+      fse.renameSync(path.join(routeDir, 'index-template.js'), path.join(routeDir, 'index.js'));
+   }
+}
+
+async function updateRouteIndexFile(routesName, routesPath) {
+   if (!routesName.length) return;
+   const routes = routesName.split(' ');
+   const indexRouteText = fse.readFileSync(path.join(routesPath, 'index.js'), 'utf-8');
+   const importLines = routes.map(route => `const ${route}Routes = require('./${route}/index')`).join('\n') + '\n';
+   const useLines = routes.map(route => `router.use('/${route}', ${route}Routes)`).join('\n') + '\n';
+   const updatedIndexRouteText = indexRouteText
+      .replace('//!!import', importLines)
+      .replace('//!!use\n', useLines)
+      .replace('ProjectName', projectName);
+   fse.writeFileSync(path.join(routesPath, 'index.js'), updatedIndexRouteText);
+}
+
+async function createModelFiles(source, modelsName, modelsPath) {
+   if (!modelsName.length) return;
+   const models = modelsName.split(' ');
+   for (const model of models) {
+      const modelText = fse.readFileSync(path.join(source, 'models', 'table.js'), 'utf-8');
+      const updatedModelText = modelText
+         .replace(/TableName1/g, inflection.capitalize(model))
+         .replace(/TableName2/g, inflection.camelize(model));
+      fse.writeFileSync(path.join(modelsPath, `${model}.js`), updatedModelText);
+   }
+}
+
+async function installRequiredPackages(destination, packageNames) {
+   await installPackages(path.join(destination), packageNames);
+   console.log('Packages installed', packageNames);
 }
 
 
@@ -131,4 +132,15 @@ function installPackages(directory, packages) {
          }
       });
    });
+}
+
+function customFilter(src, dest) {
+   if (src.includes('table.js') || src.includes('index-template.js')) {
+      return false;
+   }
+   return true;
+}
+
+function excludeIndexFile(src, dest) {
+   return !src.includes('index.js');
 }
