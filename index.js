@@ -61,6 +61,7 @@ async function createTemplate() {
       await createModelFiles(source, modelsName, modelsPath);
       await installRequiredPackages(destination, packageNames);
       console.log('Project setup completed!');
+      console.log(`add "start": "node ./bin/www" to package.json, remove main script`);
    } catch (err) {
       console.error(err);
    }

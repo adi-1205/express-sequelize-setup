@@ -25,7 +25,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
-  cookie: { maxAge: process.env.JWT_EXPIRATION },
+  cookie: { maxAge: +process.env.JWT_EXPIRATION },
 	secret: process.env.APP_PASSWORD,
 	resave: false,
 	saveUninitialized: true,
